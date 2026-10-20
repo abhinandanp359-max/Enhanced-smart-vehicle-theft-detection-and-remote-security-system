@@ -13,6 +13,7 @@ class SystemMode:
 
 class DetectionState:
     CLEAR = "CLEAR"
+    AUTHORIZED_DRIVER = "AUTHORIZED_DRIVER"
     ACCUMULATING = "ACCUMULATING"
     ALARM_ACTIVE = "ALARM_ACTIVE"
     COOLDOWN = "COOLDOWN"
@@ -48,17 +49,10 @@ class TheftStateMachine:
         self.occupancy_start_time = None
         self.highest_confidence = 0.0
 
-    def update(self, person_in_roi, confidence=0.0):
+    def update(self, person_in_roi, is_authorized=False, driver_name="Intruder", confidence=0.0):
         """
-        Evaluate current frame.
-        Returns a dict:
-        {
-            'state': DetectionState,
-            'mode': SystemMode,
-            'elapsed': float,
-            'threshold': float,
-            'trigger_alarm_now': bool
-        }
+        Evaluate current frame with driver authorization verification.
+        Returns a dict with state, authorization, elapsed timer, and alarm trigger.
         """
         now = time.time()
         trigger_alarm = False
@@ -70,6 +64,8 @@ class TheftStateMachine:
             return {
                 'state': DetectionState.CLEAR,
                 'mode': self.system_mode,
+                'is_authorized': is_authorized,
+                'driver_name': driver_name,
                 'elapsed': 0.0,
                 'threshold': self.sustained_seconds,
                 'trigger_alarm_now': False
@@ -81,6 +77,8 @@ class TheftStateMachine:
                 return {
                     'state': DetectionState.COOLDOWN,
                     'mode': self.system_mode,
+                    'is_authorized': is_authorized,
+                    'driver_name': driver_name,
                     'elapsed': now - self.last_alarm_time,
                     'threshold': self.cooldown_seconds,
                     'trigger_alarm_now': False
@@ -92,21 +90,36 @@ class TheftStateMachine:
         if person_in_roi:
             self.highest_confidence = max(self.highest_confidence, confidence)
 
+            # CASE 1: AUTHORIZED DRIVER (Owner recognized)
+            if is_authorized:
+                self.detection_state = DetectionState.AUTHORIZED_DRIVER
+                self.occupancy_start_time = None  # Reset timer; authorized driver never triggers alarm
+                return {
+                    'state': DetectionState.AUTHORIZED_DRIVER,
+                    'mode': self.system_mode,
+                    'is_authorized': True,
+                    'driver_name': driver_name,
+                    'elapsed': 0.0,
+                    'threshold': self.sustained_seconds,
+                    'trigger_alarm_now': False,
+                    'highest_confidence': self.highest_confidence
+                }
+
+            # CASE 2: UNAUTHORIZED INTRUDER / UNKNOWN PERSON
             if self.occupancy_start_time is None:
                 self.occupancy_start_time = now
                 self.detection_state = DetectionState.ACCUMULATING
 
             elapsed = now - self.occupancy_start_time
 
-            # Has the person remained in the driver seat for >= sustained_seconds?
+            # Has the unauthorized person remained in the driver seat for >= sustained_seconds?
             if elapsed >= self.sustained_seconds and self.detection_state != DetectionState.ALARM_ACTIVE:
                 self.detection_state = DetectionState.ALARM_ACTIVE
                 self.last_alarm_time = now
                 trigger_alarm = True
         else:
             # Person left the ROI before threshold -> Reset counter (Prevents false alarms!)
-            if self.detection_state == DetectionState.ACCUMULATING:
-                print(f"[State Machine] Occupant left driver seat after {elapsed:.1f}s. Resetting (False alarm prevented).")
+            if self.detection_state in [DetectionState.ACCUMULATING, DetectionState.AUTHORIZED_DRIVER]:
                 self.reset_detection()
             elif self.detection_state == DetectionState.ALARM_ACTIVE:
                 # Intruder fled after alarm
@@ -115,6 +128,8 @@ class TheftStateMachine:
         return {
             'state': self.detection_state,
             'mode': self.system_mode,
+            'is_authorized': is_authorized,
+            'driver_name': driver_name,
             'elapsed': elapsed,
             'threshold': self.sustained_seconds,
             'trigger_alarm_now': trigger_alarm,

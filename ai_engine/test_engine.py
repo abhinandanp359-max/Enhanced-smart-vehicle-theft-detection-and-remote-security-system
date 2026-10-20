@@ -55,12 +55,28 @@ def run_tests():
     assert not PersonDetector.is_in_roi(outside_detection, pixel_roi), "Point at edge should not be in ROI"
     print("  -> ROI spatial polygon gating verified.")
 
-    print("\n[TEST 4/4] Verifying YOLOv8 Model Initialization & Synthetic Frame...")
+    print("\n[TEST 4/5] Verifying YOLOv8 Model Initialization & Synthetic Frame...")
     detector = PersonDetector()
     dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
     detections = detector.detect(dummy_frame)
     assert isinstance(detections, list), "Detections should return a list"
     print("  -> YOLOv8 detector verified successfully.")
+
+    print("\n[TEST 5/5] Verifying Driver Authorization & Intruder Differentiation...")
+    from ai_engine.driver_authenticator import DriverAuthenticator
+    auth = DriverAuthenticator()
+
+    # Case A: Authorized Owner -> Must NOT alarm
+    auth_sm = TheftStateMachine(sustained_seconds=1.0)
+    auth_res = auth_sm.update(person_in_roi=True, is_authorized=True, driver_name="Owner", confidence=0.95)
+    assert auth_res['state'] == DetectionState.AUTHORIZED_DRIVER, "State should be AUTHORIZED_DRIVER"
+    assert not auth_res['trigger_alarm_now'], "Authorized driver must NOT trigger alarm"
+
+    # Case B: Unauthorized Intruder -> Must trigger alarm after sustained duration
+    intruder_sm = TheftStateMachine(sustained_seconds=0.0)  # zero threshold for immediate unit test
+    intruder_res = intruder_sm.update(person_in_roi=True, is_authorized=False, driver_name="Intruder", confidence=0.92)
+    assert intruder_res['trigger_alarm_now'], "Unauthorized intruder must trigger alarm"
+    print("  -> Authorized Driver vs Unauthorized Intruder differentiation verified.")
 
     print("\n" + "=" * 50)
     print("ALL AI ENGINE VERIFICATION TESTS PASSED SUCCESSFULLY!")
