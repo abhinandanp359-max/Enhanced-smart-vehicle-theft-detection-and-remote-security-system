@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pt
+*.pth
+.env
+venv/
+env/
+.venv/
+
+# AI Evidence & Logs
+ai_engine/evidence/*.jpg
+ai_engine/evidence/*.mp4
+runs/
+
+# Node / Frontend / Backend
+node_modules/
+dist/
+build/
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
