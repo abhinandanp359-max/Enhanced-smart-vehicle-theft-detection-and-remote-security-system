@@ -24,6 +24,7 @@ from .sound_alarm import AlarmSiren
 from .backend_client import BackendClient
 from .biometric_authenticator import BiometricAuthenticator
 from .video_recorder import VideoEvidenceRecorder
+from .hardware_controller import ESP32Controller
 
 
 def draw_corner_brackets(img, x, y, w, h, color, length=18, thickness=2):
@@ -153,6 +154,8 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
     backend = BackendClient()
     authenticator = BiometricAuthenticator()
     recorder = VideoEvidenceRecorder(pre_event_seconds=3.0, fps=20)
+    hardware = ESP32Controller()
+    owner_greeted = False
 
     if not authenticator.is_enrolled():
         print("\n" + "!" * 68)
@@ -230,9 +233,16 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
                 confidence=top_conf
             )
 
-            # Ensure siren stays silent if authorized owner is detected
-            if is_authorized and siren.is_playing():
-                siren.stop()
+            # Ensure siren and ESP32 stay silent if authorized owner is detected
+            if is_authorized:
+                if siren.is_playing():
+                    siren.stop()
+                hardware.silence_alarm()
+                if not owner_greeted:
+                    hardware.grant_access()
+                    owner_greeted = True
+            else:
+                owner_greeted = False
 
             # 5. Trigger Siren & Auto-Capture Photo AND Video if Unauthorized Intruder stays >= 3.0s
             if sm_status['trigger_alarm_now']:
@@ -241,8 +251,9 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
                 print(f"    Confidence: {sm_status['highest_confidence']:.2f} | Duration: {sm_status['elapsed']:.1f}s")
                 print("!" * 68 + "\n")
 
-                # Sound emergency siren
+                # Sound emergency siren and trigger ESP32 hardware
                 siren.start()
+                hardware.trigger_alarm()
 
                 # A. Save evidence photo with tactical HUD markings
                 annotated_evidence = frame.copy()
@@ -282,6 +293,7 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
         print("\n[AI Engine] Streaming stopped by user (Ctrl+C).")
     finally:
         siren.stop()
+        hardware.close()
         cap.release()
         if not headless:
             cv2.destroyAllWindows()
