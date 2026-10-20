@@ -207,12 +207,14 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
                     snapshot_file = backend.save_snapshot(frame, prefix="manual_test")
                     backend.dispatch_incident_async(snapshot_file, confidence=1.0, duration_seconds=0.0)
 
+    except KeyboardInterrupt:
+        print("\n[AI Engine] Streaming stopped by user (Ctrl+C).")
     finally:
         siren.stop()
         cap.release()
         if not headless:
             cv2.destroyAllWindows()
-        print("\n[AI Engine] Shutdown completed cleanly.")
+        print("[AI Engine] Shutdown completed cleanly.")
 
 
 def main():
@@ -237,4 +239,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n[AI Engine] Exited cleanly.")
+        sys.exit(0)

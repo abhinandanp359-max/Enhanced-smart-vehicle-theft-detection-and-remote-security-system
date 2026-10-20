@@ -8,11 +8,16 @@ from .config import YOLO_MODEL_PATH, CONFIDENCE_THRESHOLD, TARGET_CLASS_ID
 
 
 class PersonDetector:
-    def __init__(self, model_path=YOLO_MODEL_PATH, conf_thresh=CONFIDENCE_THRESHOLD):
+    def __init__(self, model_path=YOLO_MODEL_PATH, conf_thresh=CONFIDENCE_THRESHOLD, imgsz=384):
         self.conf_thresh = conf_thresh
+        self.imgsz = imgsz
         print(f"[AI Detector] Loading YOLOv8 model from '{model_path}'...")
         self.model = YOLO(model_path)
-        print("[AI Detector] YOLOv8 model loaded successfully.")
+        # Pre-warm model so live camera loop starts with zero lag
+        print("[AI Detector] Warming up neural network...")
+        dummy = np.zeros((self.imgsz, self.imgsz, 3), dtype=np.uint8)
+        self.model.predict(source=dummy, imgsz=self.imgsz, verbose=False)
+        print("[AI Detector] YOLOv8 engine is ready and optimized for real-time inference.")
 
     def detect(self, frame):
         """
@@ -28,6 +33,7 @@ class PersonDetector:
             source=frame,
             classes=[TARGET_CLASS_ID],  # 0 = person
             conf=self.conf_thresh,
+            imgsz=self.imgsz,
             verbose=False
         )
 
