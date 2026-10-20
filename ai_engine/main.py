@@ -23,6 +23,7 @@ from .state_machine import TheftStateMachine, SystemMode, DetectionState
 from .sound_alarm import AlarmSiren
 from .backend_client import BackendClient
 from .biometric_authenticator import BiometricAuthenticator
+from .video_recorder import VideoEvidenceRecorder
 
 
 def draw_corner_brackets(img, x, y, w, h, color, length=18, thickness=2):
@@ -151,6 +152,7 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
     siren = AlarmSiren(enabled=sound_on)
     backend = BackendClient()
     authenticator = BiometricAuthenticator()
+    recorder = VideoEvidenceRecorder(pre_event_seconds=3.0, fps=20)
 
     if not authenticator.is_enrolled():
         print("\n" + "!" * 68)
@@ -174,7 +176,7 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
 
     print("\n[AI Engine] Surveillance system running automatically.")
     print("  • Authorized Owner   -> Green access granted, silent, safe.")
-    print("  • Unauthorized Thief -> Red alert, 3s countdown, then siren + auto-capture.")
+    print("  • Unauthorized Thief -> Red alert, 3s countdown, then siren + photo & video capture.")
     print("  • Press 'Q' to exit.\n")
 
     try:
@@ -189,6 +191,9 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
             now = time.time()
             fps = 1.0 / max(0.001, (now - prev_time))
             prev_time = now
+
+            # Feed frame to rolling video buffer
+            recorder.add_frame(frame)
 
             pixel_roi = detector.get_pixel_roi(frame.shape, DEFAULT_ROI_POLYGON)
 
@@ -229,30 +234,38 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
             if is_authorized and siren.is_playing():
                 siren.stop()
 
-            # 5. Trigger Siren & Auto-Capture Evidence if Unauthorized Intruder stays >= 3.0s
+            # 5. Trigger Siren & Auto-Capture Photo AND Video if Unauthorized Intruder stays >= 3.0s
             if sm_status['trigger_alarm_now']:
                 print("\n" + "!" * 68)
-                print(">>> [CRITICAL SECURITY BREACH] UNAUTHORIZED INTRUDER IN DRIVER SEAT! <<<")
+                print(">>> [CRITICAL SECURITY BREACH] UNAUTHORIZED INTRUDER CONFIRMED! <<<")
                 print(f"    Confidence: {sm_status['highest_confidence']:.2f} | Duration: {sm_status['elapsed']:.1f}s")
                 print("!" * 68 + "\n")
 
                 # Sound emergency siren
                 siren.start()
 
-                # Automatically capture and save evidence photo with professional HUD markings
+                # A. Save evidence photo with tactical HUD markings
                 annotated_evidence = frame.copy()
                 annotated_evidence = draw_professional_hud(
                     annotated_evidence, sm_status, pixel_roi, detections, face_box, landmarks, auth_score, fps
                 )
                 snapshot_file = backend.save_snapshot(annotated_evidence, prefix="theft_intruder")
-                print(f"[AI Engine] Intruder evidence snapshot saved to: {snapshot_file}")
+                print(f"[AI Engine] Evidence photo captured & saved to: {snapshot_file}")
 
-                # Automatically dispatch incident to backend server
-                backend.dispatch_incident_async(
-                    snapshot_path=snapshot_file,
-                    confidence=sm_status['highest_confidence'],
-                    duration_seconds=sm_status['elapsed']
-                )
+                # B. Record incident MP4 video clip (pre-alarm buffer + 2.5s post-alarm footage)
+                # Once encoded, automatically dispatches both photo and video to backend & phone!
+                conf_val = sm_status['highest_confidence']
+                dur_val = sm_status['elapsed']
+
+                def on_video_ready(video_filepath):
+                    backend.dispatch_incident_async(
+                        snapshot_path=snapshot_file,
+                        video_path=video_filepath,
+                        confidence=conf_val,
+                        duration_seconds=dur_val
+                    )
+
+                recorder.record_incident_clip(post_event_seconds=2.5, on_complete=on_video_ready)
 
             # 6. Render Professional Tactical HUD Window
             if not headless:
