@@ -70,8 +70,23 @@ class BiometricAuthenticator:
         self.owner_profile = None
         if os.path.exists(self.profile_path):
             try:
-                self.owner_profile = torch.load(self.profile_path, weights_only=False)
-                print(f"[Biometrics] Loaded authorized owner profile from '{self.profile_path}'.")
+                prof = torch.load(self.profile_path, weights_only=False)
+                # Normalize keys across all versions (supports 'centroid' & 'centroid_deep')
+                centroid = prof.get("centroid", prof.get("centroid_deep"))
+                templates = prof.get("templates", prof.get("sample_templates"))
+                name = prof.get("name", "Owner")
+
+                if centroid is not None:
+                    if templates is None:
+                        templates = centroid.unsqueeze(0)
+                    self.owner_profile = {
+                        "name": name,
+                        "centroid": centroid,
+                        "templates": templates
+                    }
+                    print(f"[Biometrics] Loaded authorized owner profile from '{self.profile_path}'.")
+                else:
+                    print("[Biometrics] Warning: Profile invalid. Run 'python -m ai_engine.train'.")
             except Exception as e:
                 print(f"[Biometrics] Error loading profile: {e}")
         else:
