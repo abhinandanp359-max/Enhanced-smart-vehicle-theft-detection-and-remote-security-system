@@ -72,6 +72,22 @@ class TheftStateMachine:
             }
 
         # Check if in cooldown period after a previous alarm
+        # PRIORITY 1: If the Authorized Owner is recognized, immediately override any alarm/cooldown!
+        if person_in_roi and is_authorized:
+            self.detection_state = DetectionState.AUTHORIZED_DRIVER
+            self.occupancy_start_time = None
+            return {
+                'state': DetectionState.AUTHORIZED_DRIVER,
+                'mode': self.system_mode,
+                'is_authorized': True,
+                'driver_name': driver_name,
+                'elapsed': 0.0,
+                'threshold': self.sustained_seconds,
+                'trigger_alarm_now': False,
+                'highest_confidence': self.highest_confidence
+            }
+
+        # PRIORITY 2: Check if in cooldown period after a previous alarm (intruder mode)
         if self.detection_state == DetectionState.COOLDOWN:
             if now - self.last_alarm_time < self.cooldown_seconds:
                 return {
@@ -86,26 +102,10 @@ class TheftStateMachine:
             else:
                 self.reset_detection()
 
-        # If a person is currently inside the driver-seat ROI
+        # PRIORITY 3: Unauthorized Occupant in Driver Seat (Accumulate toward alarm)
         if person_in_roi:
             self.highest_confidence = max(self.highest_confidence, confidence)
 
-            # CASE 1: AUTHORIZED DRIVER (Owner recognized)
-            if is_authorized:
-                self.detection_state = DetectionState.AUTHORIZED_DRIVER
-                self.occupancy_start_time = None  # Reset timer; authorized driver never triggers alarm
-                return {
-                    'state': DetectionState.AUTHORIZED_DRIVER,
-                    'mode': self.system_mode,
-                    'is_authorized': True,
-                    'driver_name': driver_name,
-                    'elapsed': 0.0,
-                    'threshold': self.sustained_seconds,
-                    'trigger_alarm_now': False,
-                    'highest_confidence': self.highest_confidence
-                }
-
-            # CASE 2: UNAUTHORIZED INTRUDER / UNKNOWN PERSON
             if self.occupancy_start_time is None:
                 self.occupancy_start_time = now
                 self.detection_state = DetectionState.ACCUMULATING
