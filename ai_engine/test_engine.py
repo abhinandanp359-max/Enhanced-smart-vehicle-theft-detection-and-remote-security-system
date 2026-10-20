@@ -63,8 +63,8 @@ def run_tests():
     print("  -> YOLOv8 detector verified successfully.")
 
     print("\n[TEST 5/5] Verifying Driver Authorization & Intruder Differentiation...")
-    from ai_engine.driver_authenticator import DriverAuthenticator
-    auth = DriverAuthenticator()
+    from ai_engine.biometric_authenticator import BiometricAuthenticator
+    auth = BiometricAuthenticator()
 
     # Case A: Authorized Owner -> Must NOT alarm
     auth_sm = TheftStateMachine(sustained_seconds=1.0)
