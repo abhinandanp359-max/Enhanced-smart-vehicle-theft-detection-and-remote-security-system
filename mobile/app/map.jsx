@@ -42,7 +42,7 @@ export default function MapScreen() {
         {isGpsAvailable ? (
           <>
             <View style={styles.locationRow}>
-              <LocationPin size="sm" color={colors.primaryGreen} />
+              <LocationPin size="sm" color="#0F5132" />
               <Text style={styles.bannerLocation} numberOfLines={2}>
                 {gpsCoords?.location_name || 'Solapur-Mangalore Highway, Moodabidri, Karnataka'}
               </Text>

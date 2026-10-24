@@ -116,7 +116,7 @@ export default function AlarmModal({
         {/* Location & GPS Card */}
         <View style={styles.locationBox}>
           <View style={styles.locationHeader}>
-            <LocationPin size="xs" color={colors.primaryGreen} />
+            <LocationPin size="xs" color="#0F5132" />
             <Text style={styles.locationTitle}>VEHICLE GPS LOCATION</Text>
           </View>
           <Text style={styles.locationName}>{locationName}</Text>

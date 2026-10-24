@@ -50,8 +50,8 @@ export default function VehicleMapView({ gpsCoords, alarmActive }) {
             title="Vehicle veh_01"
             description={`Speed: ${gpsCoords?.speed || 0} km/h | Heading: ${gpsCoords?.heading || 0}°`}
           >
-            {/* Custom teardrop pin instead of standard OS lollipop */}
-            <LocationPin size="md" withAura alarm={alarmActive} />
+            {/* Custom teardrop pin with subtle aura */}
+            <LocationPin size="lg" withAura color="#0F5132" alarm={alarmActive} />
           </Marker>
           <Polyline
             coordinates={trail}
@@ -89,9 +89,9 @@ export default function VehicleMapView({ gpsCoords, alarmActive }) {
         <Text style={styles.geofenceTag}>500m Safe Zone</Text>
       </View>
 
-      {/* Center Teardrop Location Symbol with Radar Aura (No Lollipop!) */}
+      {/* Center Location Symbol with Subtle Circular Highlight */}
       <View style={styles.centerPinWrapper}>
-        <LocationPin size="lg" withAura alarm={alarmActive} />
+        <LocationPin size="lg" withAura color="#0F5132" alarm={alarmActive} />
         <View style={styles.calloutPill}>
           <Text style={styles.calloutText}>
             {alarmActive ? '🚨 ALERT: VEH_01' : '🚗 Modern SUV • veh_01'}

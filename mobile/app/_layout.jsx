@@ -64,7 +64,7 @@ function TabsNavigator() {
           title: 'Live Map',
           tabBarIcon: ({ color, focused }) => (
             <View style={styles.iconWrapper} pointerEvents="none">
-              <LocationPin size="sm" color={focused ? colors.primaryGreen : '#9CA3AF'} />
+              <LocationPin size="sm" color={focused ? '#0F5132' : '#9CA3AF'} />
               {focused ? <View style={styles.activeIndicator} /> : null}
             </View>
           ),

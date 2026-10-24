@@ -215,7 +215,7 @@ export default function HomeScreen() {
               accessibilityLabel="View live GPS telemetry and satellite map"
             >
               <View style={[styles.metricIconCircle, { backgroundColor: '#E6F4EA' }]}>
-                <LocationPin size="sm" color={colors.primaryGreen} />
+                <LocationPin size="sm" color="#0F5132" />
               </View>
               <Text style={styles.metricLabel}>GPS</Text>
               <View style={styles.metricStatusRow}>
@@ -304,7 +304,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/map')}
           >
             <View style={styles.locationIconWrapper}>
-              <LocationPin size="sm" color={colors.primaryGreen} />
+              <LocationPin size="sm" color="#0F5132" />
             </View>
             <View style={styles.locationTitleWrapper}>
               <Text style={styles.locationTitle}>Vehicle Location</Text>
@@ -322,15 +322,9 @@ export default function HomeScreen() {
               style={styles.mapTextureImage}
               resizeMode="cover"
             />
-            {/* Center Pulsing Teardrop Pin (No Lollipop!) */}
+            {/* Center Live Location Pin with Subtle Highlight */}
             <View style={styles.centerPinContainer}>
-              <View style={styles.pinAuraOuter}>
-                <View style={styles.pinAuraInner}>
-                  <View style={styles.teardropPin}>
-                    <View style={styles.teardropDot} />
-                  </View>
-                </View>
-              </View>
+              <LocationPin size="lg" withAura color="#0F5132" alarm={alarmActive} />
             </View>
           </View>
 
@@ -692,7 +686,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     left: '50%',
-    transform: [{ translateX: -30 }, { translateY: -30 }],
+    transform: [{ translateX: -38 }, { translateY: -38 }],
     alignItems: 'center',
     justifyContent: 'center',
   },

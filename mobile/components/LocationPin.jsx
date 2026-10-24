@@ -11,38 +11,53 @@ export default function LocationPin({
 }) {
   const pinColor = alarm ? colors.crimson : color;
 
+  // Symmetrical geometry for consistent map-pin with circular center
   const sizeMap = {
-    xs: { pin: 14, dot: 4, auraOuter: 36, auraInner: 24, shift: -1 },
-    sm: { pin: 18, dot: 5, auraOuter: 46, auraInner: 30, shift: -2 },
-    md: { pin: 24, dot: 7, auraOuter: 60, auraInner: 40, shift: -3 },
-    lg: { pin: 32, dot: 9, auraOuter: 80, auraInner: 54, shift: -4 },
+    xs: { head: 14, dot: 4.5, tipWidth: 8, tipHeight: 6, tipOverlap: 3.5, auraOuter: 32, auraInner: 22 },
+    sm: { head: 18, dot: 6, tipWidth: 10, tipHeight: 8, tipOverlap: 4.5, auraOuter: 42, auraInner: 28 },
+    md: { head: 24, dot: 8, tipWidth: 13, tipHeight: 10, tipOverlap: 6, auraOuter: 56, auraInner: 38 },
+    lg: { head: 32, dot: 10.5, tipWidth: 17, tipHeight: 14, tipOverlap: 8, auraOuter: 76, auraInner: 50 },
   };
 
   const dim = sizeMap[size] || sizeMap.md;
 
   const pinElement = (
-    <View
-      style={[
-        styles.pin,
-        {
-          width: dim.pin,
-          height: dim.pin,
-          backgroundColor: pinColor,
-          borderTopLeftRadius: dim.pin / 2,
-          borderTopRightRadius: dim.pin / 2,
-          borderBottomLeftRadius: dim.pin / 2,
-          borderBottomRightRadius: 0,
-          transform: [{ rotate: '-45deg' }, { translateY: dim.shift }],
-        },
-      ]}
-    >
+    <View style={[styles.pinWrapper, { width: dim.head, height: dim.head + dim.tipHeight - dim.tipOverlap }]}>
+      {/* Circular Pin Head with Circular Center */}
       <View
         style={[
-          styles.dot,
+          styles.head,
           {
-            width: dim.dot,
-            height: dim.dot,
-            borderRadius: dim.dot / 2,
+            width: dim.head,
+            height: dim.head,
+            borderRadius: dim.head / 2,
+            backgroundColor: pinColor,
+          },
+        ]}
+      >
+        {/* Circular Center Hole */}
+        <View
+          style={[
+            styles.dot,
+            {
+              width: dim.dot,
+              height: dim.dot,
+              borderRadius: dim.dot / 2,
+            },
+          ]}
+        />
+      </View>
+
+      {/* Downward Pointed Tip */}
+      <View
+        style={[
+          styles.tip,
+          {
+            marginTop: -dim.tipOverlap,
+            borderLeftWidth: dim.tipWidth / 2,
+            borderRightWidth: dim.tipWidth / 2,
+            borderTopWidth: dim.tipHeight,
+            borderTopColor: pinColor,
           },
         ]}
       />
@@ -51,14 +66,15 @@ export default function LocationPin({
 
   if (!withAura) {
     return (
-      <View style={{ width: dim.pin + 4, height: dim.pin + 4, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={[styles.centerContainer, { width: dim.head, height: dim.head + 4 }]}>
         {pinElement}
       </View>
     );
   }
 
-  const auraOuterColor = alarm ? 'rgba(239, 68, 68, 0.18)' : 'rgba(16, 185, 129, 0.16)';
-  const auraInnerColor = alarm ? 'rgba(239, 68, 68, 0.35)' : 'rgba(16, 185, 129, 0.32)';
+  // Subtle translucent green circular highlight around the pin
+  const auraOuterColor = alarm ? 'rgba(220, 38, 38, 0.14)' : 'rgba(15, 81, 50, 0.12)';
+  const auraInnerColor = alarm ? 'rgba(220, 38, 38, 0.28)' : 'rgba(15, 81, 50, 0.22)';
 
   return (
     <View
@@ -90,17 +106,35 @@ export default function LocationPin({
 }
 
 const styles = StyleSheet.create({
-  pin: {
+  centerContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  pinWrapper: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.22,
     shadowRadius: 3,
     elevation: 3,
   },
+  head: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
   dot: {
     backgroundColor: '#FFFFFF',
+  },
+  tip: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    zIndex: 1,
   },
   auraOuter: {
     alignItems: 'center',

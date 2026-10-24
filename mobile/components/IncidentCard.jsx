@@ -101,7 +101,7 @@ export default function IncidentCard({ incident }) {
             Duration: <Text style={styles.statBold}>{duration} in Driver Seat</Text>
           </Text>
           <View style={styles.locationWrapper}>
-            <LocationPin size="xs" color={colors.primaryGreen} />
+            <LocationPin size="xs" color="#0F5132" />
             <Text style={styles.locationLine} numberOfLines={2}>
               {locationName}
             </Text>
