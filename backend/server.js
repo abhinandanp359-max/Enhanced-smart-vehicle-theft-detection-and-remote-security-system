@@ -575,12 +575,23 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start listening on all network interfaces (0.0.0.0)
 server.listen(PORT, '0.0.0.0', () => {
+  const os = require('os');
+  const nets = os.networkInterfaces();
+  let localIp = '127.0.0.1';
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal && !net.address.startsWith('192.168.56.')) {
+        localIp = net.address;
+        break;
+      }
+    }
+  }
+
   console.log(`\n======================================================`);
   console.log(`  🛡️  VehicleGuard AI Gateway Server Running`);
   console.log(`  Local:   http://localhost:${PORT}`);
-  console.log(`  Network: http://10.118.199.170:${PORT}`);
+  console.log(`  Network: http://${localIp}:${PORT}`);
   console.log(`  Socket:  WebSocket & HTTP Ready (Port ${PORT})`);
   console.log(`======================================================\n`);
 });

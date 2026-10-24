@@ -1,13 +1,23 @@
 // utils/api.js
 import axios from 'axios';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 const getBackendUrl = () => {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
     const host = window.location.hostname || 'localhost';
     return `http://${host}:5000`;
   }
-  return 'http://10.118.199.170:5000';
+
+  // Dynamically resolve host IP from Expo dev server if running on LAN
+  const hostUri = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoClient?.hostUri || '';
+  if (hostUri && !hostUri.includes('exp.direct')) {
+    const host = hostUri.split(':')[0];
+    if (host) return `http://${host}:5000`;
+  }
+
+  // Active PC Wi-Fi IP address
+  return 'http://172.21.211.170:5000';
 };
 
 export const BACKEND = getBackendUrl();
