@@ -1,0 +1,22 @@
+{
+  "event_type": "unauthorized_person",
+  "security_state": "CRITICAL_THEFT_ALERT",
+  "vehicle_id": "veh_01",
+  "timestamp": "2026-10-23T23:00:08+0530",
+  "confidence": "0.93",
+  "duration_seconds": "3.1",
+  "image_id": "theft_intruder_veh_01_20261023_230008.jpg",
+  "video_id": "",
+  "gps": {
+    "latitude": 12.9716,
+    "longitude": 77.5946,
+    "location_name": "College Campus - Main Parking Bay",
+    "google_maps_url": "https://www.google.com/maps?q=12.971600,77.594600",
+    "status": "CONFIG_DEFAULT_GPS"
+  },
+  "hardware_telemetry": {
+    "siren": "ACTIVE_HIGH_DECIBEL",
+    "esp32_relay": "TRIGGERED",
+    "cabin_roi": "BREACHED"
+  }
+}

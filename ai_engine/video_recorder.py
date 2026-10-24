@@ -83,3 +83,13 @@ class VideoEvidenceRecorder:
         print(f"[Video Recorder] >>> Incident video clip recorded ({len(frames)} frames): {video_filepath} <<<")
         if callback:
             callback(video_filepath)
+
+    def flush_and_save(self):
+        """Called on system shutdown to ensure any active recording is immediately encoded and dispatched."""
+        if self._recording and len(self._active_clip_frames) > 0:
+            print(f"[Video Recorder] Finalizing incident video clip on shutdown ({len(self._active_clip_frames)} frames)...")
+            self._recording = False
+            frames = list(self._active_clip_frames)
+            self._active_clip_frames = []
+            self._save_clip_worker(frames, self._on_complete_callback)
+

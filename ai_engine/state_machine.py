@@ -9,6 +9,7 @@ from .config import SUSTAINED_SECONDS, ALARM_COOLDOWN_SECONDS
 class SystemMode:
     DISARMED = "DISARMED"
     ARMED = "ARMED"
+    TRUSTED_DRIVER = "TRUSTED_DRIVER"
 
 
 class DetectionState:
@@ -43,6 +44,12 @@ class TheftStateMachine:
         self.reset_detection()
         print("[State Machine] System DISARMED.")
 
+    def set_trusted_driver(self):
+        """Enable trusted guest driver mode."""
+        self.system_mode = SystemMode.TRUSTED_DRIVER
+        self.reset_detection()
+        print("[State Machine] System in TRUSTED DRIVER mode (Alarms Bypassed).")
+
     def reset_detection(self):
         """Resets the detection accumulator."""
         self.detection_state = DetectionState.CLEAR
@@ -58,14 +65,16 @@ class TheftStateMachine:
         trigger_alarm = False
         elapsed = 0.0
 
-        # If system is DISARMED, do not accumulate or alarm
-        if self.system_mode == SystemMode.DISARMED:
+        # If system is DISARMED or in TRUSTED_DRIVER mode, do not accumulate or alarm
+        if self.system_mode in (SystemMode.DISARMED, SystemMode.TRUSTED_DRIVER):
             self.reset_detection()
+            is_auth = True if self.system_mode == SystemMode.TRUSTED_DRIVER else is_authorized
+            d_name = "Trusted Driver (Authorized)" if self.system_mode == SystemMode.TRUSTED_DRIVER else driver_name
             return {
-                'state': DetectionState.CLEAR,
+                'state': DetectionState.AUTHORIZED_DRIVER if self.system_mode == SystemMode.TRUSTED_DRIVER else DetectionState.CLEAR,
                 'mode': self.system_mode,
-                'is_authorized': is_authorized,
-                'driver_name': driver_name,
+                'is_authorized': is_auth,
+                'driver_name': d_name,
                 'elapsed': 0.0,
                 'threshold': self.sustained_seconds,
                 'trigger_alarm_now': False

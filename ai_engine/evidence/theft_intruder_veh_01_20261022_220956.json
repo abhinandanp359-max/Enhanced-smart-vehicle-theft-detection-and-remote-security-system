@@ -1,0 +1,22 @@
+{
+  "event_type": "unauthorized_person",
+  "security_state": "CRITICAL_THEFT_ALERT",
+  "vehicle_id": "veh_01",
+  "timestamp": "2026-10-22T22:09:56+0530",
+  "confidence": "0.89",
+  "duration_seconds": "3.0",
+  "image_id": "theft_intruder_veh_01_20261022_220956.jpg",
+  "video_id": "",
+  "gps": {
+    "latitude": 13.044081,
+    "longitude": 74.97846,
+    "location_name": "Solapur-Mangalore Highway, Moodabidri, Karnataka",
+    "google_maps_url": "https://www.google.com/maps?q=13.044081,74.978460",
+    "status": "LIVE_DYNAMIC_GPS"
+  },
+  "hardware_telemetry": {
+    "siren": "ACTIVE_HIGH_DECIBEL",
+    "esp32_relay": "TRIGGERED",
+    "cabin_roi": "BREACHED"
+  }
+}

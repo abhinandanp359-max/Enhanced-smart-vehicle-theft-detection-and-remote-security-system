@@ -66,15 +66,36 @@ def run_tests():
     from ai_engine.biometric_authenticator import BiometricAuthenticator
     auth = BiometricAuthenticator()
 
+    # Biometric level verification
+    auth.find_face = lambda frame, bbox: (np.ones((50, 50, 3), dtype=np.uint8), (10, 10, 50, 50), [])
+    if auth.is_enrolled():
+        # Owner embedding must authenticate after 3 consecutive frames
+        owner_emb = auth.clean_templates[0]
+        for _ in range(3):
+            auth.last_embedding = owner_emb
+            is_auth, name, conf, _, _ = auth.authenticate(np.zeros((100, 100, 3), dtype=np.uint8), (10, 10, 90, 90))
+        assert is_auth, "Enrolled owner must be recognized as Authorized Owner"
+
+        # Friend / stranger embedding must be strictly rejected
+        auth.reset()
+        friend_emb = np.random.randn(1, 128).astype(np.float32)
+        friend_emb /= np.linalg.norm(friend_emb)
+        for _ in range(5):
+            auth.last_embedding = friend_emb
+            is_friend_auth, f_name, f_conf, _, _ = auth.authenticate(np.zeros((100, 100, 3), dtype=np.uint8), (10, 10, 90, 90))
+        assert not is_friend_auth, "Friend/stranger must NEVER be authorized"
+        assert f_name == "Unauthorized Intruder", "Friend must be tagged as Unauthorized Intruder"
+        print("  -> High-security biometric engine strictly separates owner from friend.")
+
     # Case A: Authorized Owner -> Must NOT alarm
     auth_sm = TheftStateMachine(sustained_seconds=1.0)
     auth_res = auth_sm.update(person_in_roi=True, is_authorized=True, driver_name="Owner", confidence=0.95)
     assert auth_res['state'] == DetectionState.AUTHORIZED_DRIVER, "State should be AUTHORIZED_DRIVER"
     assert not auth_res['trigger_alarm_now'], "Authorized driver must NOT trigger alarm"
 
-    # Case B: Unauthorized Intruder -> Must trigger alarm after sustained duration
+    # Case B: Unauthorized Intruder (Friend) -> Must trigger alarm after sustained duration
     intruder_sm = TheftStateMachine(sustained_seconds=0.0)  # zero threshold for immediate unit test
-    intruder_res = intruder_sm.update(person_in_roi=True, is_authorized=False, driver_name="Intruder", confidence=0.92)
+    intruder_res = intruder_sm.update(person_in_roi=True, is_authorized=False, driver_name="Unauthorized Intruder", confidence=0.92)
     assert intruder_res['trigger_alarm_now'], "Unauthorized intruder must trigger alarm"
     print("  -> Authorized Driver vs Unauthorized Intruder differentiation verified.")
 

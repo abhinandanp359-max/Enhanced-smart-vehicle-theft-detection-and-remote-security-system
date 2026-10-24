@@ -9,6 +9,7 @@ Features:
 import argparse
 import sys
 import time
+import requests
 import cv2
 import numpy as np
 
@@ -23,6 +24,7 @@ from .state_machine import TheftStateMachine, SystemMode, DetectionState
 from .sound_alarm import AlarmSiren
 from .backend_client import BackendClient
 from .biometric_authenticator import BiometricAuthenticator
+from .eye_authenticator import EyeAuthenticator
 from .video_recorder import VideoEvidenceRecorder
 from .hardware_controller import ESP32Controller
 
@@ -50,12 +52,21 @@ def draw_professional_hud(frame, sm_status, pixel_roi, detections, face_box, lan
     elapsed = sm_status['elapsed']
     threshold = sm_status['threshold']
     driver_name = sm_status.get('driver_name', 'Unknown')
+    mode = sm_status.get('mode', SystemMode.ARMED)
     is_auth = sm_status.get('is_authorized', False)
 
     # 1. State Styling
-    if state == DetectionState.CLEAR:
-        theme_color = (0, 220, 0)      # Neon Green (Secure)
-        status_text = "SECURITY STATUS: ARMED [CABIN VACANT - ALL NOMINAL]"
+    if mode == SystemMode.TRUSTED_DRIVER:
+        theme_color = (0, 190, 255)      # Amber / Gold
+        status_text = "SECURITY STATUS: TRUSTED DRIVER ACTIVE [SIREN BYPASSED]"
+        status_bg = (0, 120, 180)
+    elif mode == SystemMode.DISARMED:
+        theme_color = (120, 120, 120)    # Neutral Grey
+        status_text = "SECURITY STATUS: SYSTEM DISARMED [SURVEILLANCE PAUSED]"
+        status_bg = (60, 60, 60)
+    elif state == DetectionState.CLEAR:
+        theme_color = (0, 220, 0)        # Neon Green (Secure)
+        status_text = "SECURITY STATUS: ARMED [CABIN MONITORED - ALL CLEAR]"
         status_bg = (0, 130, 0)
     elif state == DetectionState.AUTHORIZED_DRIVER:
         theme_color = (0, 255, 120)    # Emerald Green
@@ -93,7 +104,8 @@ def draw_professional_hud(frame, sm_status, pixel_roi, detections, face_box, lan
         conf = det['confidence']
         box_color = (0, 255, 120) if is_auth else ((0, 0, 255) if state in [DetectionState.ACCUMULATING, DetectionState.ALARM_ACTIVE] else (0, 200, 255))
         cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 1)
-        cv2.putText(frame, f"Occupant {int(conf * 100)}%", (x1, max(15, y1 - 6)),
+        # Position occupant confidence label at bottom-left of body box to avoid collision with face tag
+        cv2.putText(frame, f"Occupant: {int(conf * 100)}%", (x1 + 6, min(h - 45, y2 - 8)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, box_color, 1, cv2.LINE_AA)
 
     # 4. Tactical Biometric Face Reticle & Facial Landmarks
@@ -108,9 +120,19 @@ def draw_professional_hud(frame, sm_status, pixel_roi, detections, face_box, lan
         for lx, ly in landmarks:
             cv2.circle(frame, (lx, ly), 2, reticle_color, -1)
 
-        # Identity Tag
-        tag = f"AUTHORIZED OWNER [{int(auth_score * 100)}%]" if is_auth else f"UNAUTHORIZED INTRUDER [{int(auth_score * 100)}%]"
-        cv2.putText(frame, tag, (fx - 10, max(20, fy - 8)),
+        # Identity Tag:
+        # For authorized owner: shows high biometric match percentage
+        # For unauthorized intruder: shows ACCESS DENIED or Owner Match percentage
+        if is_auth:
+            tag = f"AUTHORIZED OWNER [{int(auth_score * 100)}% MATCH]"
+        else:
+            tag = "UNAUTHORIZED INTRUDER [ACCESS DENIED]" if auth_score < 0.15 else f"UNAUTHORIZED INTRUDER [Match: {int(auth_score * 100)}%]"
+
+        # Draw dark contrast pill behind text for ultra-crisp visibility
+        (tw, th), _ = cv2.getTextSize(tag, cv2.FONT_HERSHEY_SIMPLEX, 0.50, 2)
+        tag_y = max(25, fy - 10)
+        cv2.rectangle(frame, (fx - 10, tag_y - th - 5), (fx - 10 + tw + 8, tag_y + 4), (0, 0, 0), -1)
+        cv2.putText(frame, tag, (fx - 6, tag_y - 2),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.50, reticle_color, 2, cv2.LINE_AA)
 
     # 5. Top Cyber-Security Status Banner
@@ -153,6 +175,7 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
     siren = AlarmSiren(enabled=sound_on)
     backend = BackendClient()
     authenticator = BiometricAuthenticator()
+    eye_auth = EyeAuthenticator()
     recorder = VideoEvidenceRecorder(pre_event_seconds=3.0, fps=20)
     hardware = ESP32Controller()
     owner_greeted = False
@@ -182,11 +205,15 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
     print("  • Unauthorized Thief -> Red alert, 3s countdown, then siren + photo & video capture.")
     print("  • Press 'Q' to exit.\n")
 
+    last_state_poll = 0.0
+    last_stream_push = 0.0
+
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
-                if isinstance(source, str):
+                # Only loop for local video files, not live cameras or IP streams
+                if isinstance(source, str) and not source.startswith("http") and not source.isdigit():
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     continue
                 break
@@ -194,6 +221,33 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
             now = time.time()
             fps = 1.0 / max(0.001, (now - prev_time))
             prev_time = now
+
+            # Sync remote security state (ARMED / DISARMED / TRUSTED_DRIVER / SIREN) from phone app
+            if now - last_state_poll > 1.0:
+                last_state_poll = now
+                try:
+                    r = requests.get("http://localhost:5000/api/security/state", timeout=0.25)
+                    if r.status_code == 200:
+                        data = r.json()
+                        remote_mode = data.get("state", "ARMED")
+                        remote_alarm = Boolean = data.get("alarmActive", False)
+
+                        # Remote Siren Override
+                        if remote_alarm and not siren.is_playing():
+                            siren.start()
+                            esp32.trigger_alarm()
+                        elif not remote_alarm and siren.is_playing() and state_machine.detection_state != DetectionState.ALARM_ACTIVE:
+                            siren.stop()
+                            esp32.silence_alarm()
+
+                        if remote_mode == "TRUSTED_DRIVER" and state_machine.system_mode != SystemMode.TRUSTED_DRIVER:
+                            state_machine.set_trusted_driver()
+                        elif remote_mode == "DISARMED" and state_machine.system_mode != SystemMode.DISARMED:
+                            state_machine.disarm()
+                        elif remote_mode == "ARMED" and state_machine.system_mode != SystemMode.ARMED:
+                            state_machine.arm()
+                except Exception:
+                    pass
 
             # Feed frame to rolling video buffer
             recorder.add_frame(frame)
@@ -224,6 +278,20 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
                 is_authorized, driver_name, auth_score, face_box, landmarks = authenticator.authenticate(
                     frame, target_person['bbox']
                 )
+
+                # Secondary Ocular Confirmation (Strict Multi-Factor Gate):
+                # Eye biometrics can ONLY strengthen an already authenticated face;
+                # it is STRICTLY FORBIDDEN from authorizing an unknown face or intruder.
+                if is_authorized and eye_auth.is_enrolled() and face_box[2] >= 25:
+                    fx, fy, fw, fh = face_box
+                    h_fr, w_fr = frame.shape[:2]
+                    face_crop = frame[max(0, fy):min(h_fr, fy + fh), max(0, fx):min(w_fr, fx + fw)]
+                    eye_ok, eye_score = eye_auth.authenticate(face_crop)
+                    if eye_ok:
+                        driver_name = "Owner (Dual-Factor Confirmed)"
+            else:
+                # Seat is vacant: instantly purge biometric history so next occupant is evaluated cleanly
+                authenticator.reset()
 
             # 4. Multi-Factor Theft State Machine
             sm_status = state_machine.update(
@@ -263,26 +331,49 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
                 snapshot_file = backend.save_snapshot(annotated_evidence, prefix="theft_intruder")
                 print(f"[AI Engine] Evidence photo captured & saved to: {snapshot_file}")
 
-                # B. Record incident MP4 video clip (pre-alarm buffer + 2.5s post-alarm footage)
-                # Once encoded, automatically dispatches both photo and video to backend & phone!
+                # B. IMMEDIATELY dispatch Photo & GPS JSON alert to phone without waiting
                 conf_val = sm_status['highest_confidence']
                 dur_val = sm_status['elapsed']
+                backend.dispatch_incident_async(
+                    snapshot_path=snapshot_file,
+                    video_path=None,
+                    confidence=conf_val,
+                    duration_seconds=dur_val
+                )
 
+                # C. Record incident MP4 video clip (pre-alarm buffer + 2.5s post-alarm footage):
+                # As soon as video is encoded, dispatches the MP4 video clip to Telegram!
                 def on_video_ready(video_filepath):
-                    backend.dispatch_incident_async(
-                        snapshot_path=snapshot_file,
-                        video_path=video_filepath,
-                        confidence=conf_val,
-                        duration_seconds=dur_val
-                    )
+                    backend.dispatch_video_async(video_filepath)
 
                 recorder.record_incident_clip(post_event_seconds=2.5, on_complete=on_video_ready)
 
-            # 6. Render Professional Tactical HUD Window
+            # 6. Real-Time Tactical HUD & Live Camera Stream Push (~7-8 FPS)
+            hud_frame = draw_professional_hud(
+                frame.copy(), sm_status, pixel_roi, detections, face_box, landmarks, auth_score, fps
+            )
+
+            # Push live camera feed to backend for phone app viewing
+            if now - last_stream_push > 0.12:
+                last_stream_push = now
+                def _push_live_frame(f_to_send):
+                    try:
+                        # 640x360 @ 55% quality is ~15KB per frame: ultra low latency and silky smooth
+                        small = cv2.resize(f_to_send, (640, 360))
+                        _, buf = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 55])
+                        requests.post(
+                            "http://localhost:5000/api/camera/frame",
+                            data=buf.tobytes(),
+                            headers={"Content-Type": "image/jpeg"},
+                            timeout=0.35
+                        )
+                    except Exception:
+                        pass
+                import threading
+                threading.Thread(target=_push_live_frame, args=(hud_frame.copy(),), daemon=True).start()
+
+            # Render Professional Tactical HUD Window locally
             if not headless:
-                hud_frame = draw_professional_hud(
-                    frame.copy(), sm_status, pixel_roi, detections, face_box, landmarks, auth_score, fps
-                )
                 cv2.imshow(window_name, hud_frame)
 
                 key = cv2.waitKey(1) & 0xFF
@@ -292,6 +383,8 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
     except KeyboardInterrupt:
         print("\n[AI Engine] Streaming stopped by user (Ctrl+C).")
     finally:
+        recorder.flush_and_save()
+        backend.wait_for_pending_uploads(timeout=15)
         siren.stop()
         hardware.close()
         cap.release()
@@ -302,7 +395,10 @@ def run_pipeline(source=VIDEO_SOURCE, sustained_sec=SUSTAINED_SECONDS, sound_on=
 
 def main():
     parser = argparse.ArgumentParser(description="Smart Vehicle Theft Detection AI Engine")
-    parser.add_argument("--source", default=VIDEO_SOURCE, help="Webcam index (e.g. 0) or path to video file")
+    parser.add_argument("--source", default=VIDEO_SOURCE,
+                        help="Camera index (e.g. 0), video file path, or phone IP stream URL "
+                             "(e.g. http://192.168.1.5:8080/video for Android IP Webcam app, "
+                             "or http://192.168.1.5:4747/video for DroidCam)")
     parser.add_argument("--sustained", type=float, default=SUSTAINED_SECONDS, help="Sustained occupancy threshold in seconds")
     parser.add_argument("--no-sound", action="store_true", help="Disable local siren sound")
     parser.add_argument("--headless", action="store_true", help="Run without opening GUI display window")
